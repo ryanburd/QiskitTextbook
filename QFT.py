@@ -9,7 +9,6 @@ from qiskit.visualization import plot_histogram, plot_bloch_multivector
 #%%
 # This cell completes a 3 qubit QFT
 
-# def main():
 # Create a 3 qubit circuit
 qc = QuantumCircuit(3)
 
@@ -32,8 +31,6 @@ qc.swap(0, 2)
 
 qc.draw(output='mpl')
 
-# if __name__ == "main":
-#     main()
 # %%
 # This cell completes an n-qubit QFT
 
@@ -63,13 +60,15 @@ def qft(circuit, n):
     return circuit
 
 # Use the number 8 in the computational basis to test the QFT code.
+# Rather than testing a number needing 3 qubits like in the text and problems,
+# I am using a number that requires 4 qubits.
 # Running the line below provides 8 in binary: 1000
 bin(8)
 
 # Create a circuit of 4 qubits (to represent 8 in binary) and obtain its QFT
 qc = QuantumCircuit(4)
 # Intialize qubit 0 in the 1 state to create the 1000 state.
-qc.x(0)
+qc.x(3)
 
 # Use the simulator to check that the qubits are in the state 1000.
 sim = Aer.get_backend("aer_simulator")
@@ -84,4 +83,55 @@ qc.draw(output='mpl')
 qc.save_statevector()
 statevector = sim.run(qc).result().get_statevector()
 plot_bloch_multivector(statevector)
-# %%
+#%%
+# Below, we will test the n-qubit QFT circuit on a real quantum computer. We
+# will first create the Fourier transformed state 8, apply the inverse of the
+# circuit, and measure the inversed state on the real quantum computer. We
+# should obtain the 100 state with the highest probability.
+
+# Define the inverse of the n-qubit QFT circuit above.
+def inverse_qft(circuit, n):
+    qft_circ = qft(QuantumCircuit(n), n)
+    invqft_circ = qft_circ.inverse()
+    circuit.append(invqft_circ, circuit.qubits[:n])
+    return circuit.decompose()
+
+# Create the qubits in their Fourier transformed states.
+number = 8
+nqubits = 4
+qc = QuantumCircuit(nqubits)
+for qubit in range(nqubits):
+    qc.h(qubit)
+qc.p(number*pi/8,0)
+qc.p(number*pi/4,1)
+qc.p(number*pi/2,2)
+qc.p(number*pi,3)
+qc.draw(output='mpl')
+
+# Verify the prepared state matches the QFT state from above.
+sim = Aer.get_backend("aer_simulator")
+qc_init = qc.copy()
+qc_init.save_statevector()
+statevector = sim.run(qc_init).result().get_statevector()
+plot_bloch_multivector(statevector)
+
+# Create the inversed QFT circuit
+qc = inverse_qft(qc, nqubits)
+qc.measure_all()
+qc.draw(output='mpl')
+
+# Get the least busy backend with at least the same number of qubits as nqubits
+IBMQ.load_account()
+provider = IBMQ.get_provider(hub='ibm-q')
+backend = least_busy(provider.backends(filters=lambda x: x.configuration().n_qubits >= nqubits
+                                        and not x.configuration().simulator
+                                        and x.status().operational==True))
+print("least busy backend: ", backend)
+
+# Run the job
+shots = 2048
+transpiled_qc = transpile(qc, backend, optimization_level=3)
+job = backend.run(transpiled_qc, shots=shots)
+job_monitor(job)
+counts = job.result().get_counts()
+plot_histogram(counts)
