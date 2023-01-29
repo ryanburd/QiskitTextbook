@@ -1,4 +1,7 @@
 #%%
+# This file completes the examples and problems from section 3.5 of the Qiskit
+# textbook on the Quantum Fourier Transform
+
 import numpy as np
 from numpy import pi
 from qiskit import QuantumCircuit, transpile, Aer, IBMQ
@@ -59,18 +62,19 @@ def qft(circuit, n):
     swap_registers(circuit, n)
     return circuit
 
-# Use the number 8 in the computational basis to test the QFT code.
+# Use the number 11 in the computational basis to test the QFT code.
 # Rather than testing a number needing 3 qubits like in the text and problems,
 # I am using a number that requires 4 qubits.
-# Running the line below provides 8 in binary: 1000
-bin(8)
+# Running the line below provides 11 in binary: 1011
+bin(11)
 
-# Create a circuit of 4 qubits (to represent 8 in binary) and obtain its QFT
+# Create a circuit of 4 qubits (to represent 11 in binary) and obtain its QFT
 qc = QuantumCircuit(4)
-# Intialize qubit 0 in the 1 state to create the 1000 state.
-qc.x(3)
 
-# Use the simulator to check that the qubits are in the state 1000.
+# Intialize qubits 0, 1, and 3 in the 1 state to create the 1011 state.
+qc.x([0, 1, 3])
+
+# Use the simulator to check that the qubits are in the state 1011.
 sim = Aer.get_backend("aer_simulator")
 qc_init = qc.copy()
 qc_init.save_statevector()
@@ -85,9 +89,9 @@ statevector = sim.run(qc).result().get_statevector()
 plot_bloch_multivector(statevector)
 #%%
 # Below, we will test the n-qubit QFT circuit on a real quantum computer. We
-# will first create the Fourier transformed state 8, apply the inverse of the
+# will first create the Fourier transformed state 11, apply the inverse of the
 # circuit, and measure the inversed state on the real quantum computer. We
-# should obtain the 100 state with the highest probability.
+# should obtain the 1011 state with the highest probability.
 
 # Define the inverse of the n-qubit QFT circuit above.
 def inverse_qft(circuit, n):
@@ -97,7 +101,7 @@ def inverse_qft(circuit, n):
     return circuit.decompose()
 
 # Create the qubits in their Fourier transformed states.
-number = 8
+number = 11
 nqubits = 4
 qc = QuantumCircuit(nqubits)
 for qubit in range(nqubits):
@@ -135,3 +139,38 @@ job = backend.run(transpiled_qc, shots=shots)
 job_monitor(job)
 counts = job.result().get_counts()
 plot_histogram(counts)
+# %%
+# This cell is an answer to Problem 3 in section 3.5 of the Qiskit textbook.
+# Write the QFT function without recursion. Verify with the unitary simulator.
+
+from qiskit_aer.backends import UnitarySimulator
+
+# QFT rotations function without using recursion
+def qft_rotations_norec(circuit,n):
+    # 'n' is the number of qubits involved in the QFT, so subtract 1 to get the
+    # correct index.
+    n -= 1
+    while n > 0:
+        circuit.h(n)
+        for qubit in range(n):
+            circuit.cp(pi/2**(n-qubit), qubit, n)
+        n -= 1
+    return circuit
+
+# Create a circuit of 2 qubits. Apply the QFT rotations functions with and
+# without recursion to compare the result.
+nqubits = 2
+qc = QuantumCircuit(nqubits)
+qc_rec = qft_rotations(qc, nqubits)
+qc_norec = qft_rotations_norec(qc, nqubits)
+
+# Obtain the unitary matrix of the two QFT rotations functions above.
+# Subtracting them and printing the matrix verifies they are the same
+# since a 0 matrix is returned.
+sim = UnitarySimulator(precision='single')
+unitary_rec = sim.run(qc_rec).result().get_unitary()
+unitary_norec = sim.run(qc_norec).result().get_unitary()
+diff = unitary_rec-unitary_norec
+print(np.around(diff, 5))
+
+# %%
