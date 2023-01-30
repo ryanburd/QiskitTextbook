@@ -48,7 +48,7 @@ def qft_rotations(circuit,n):
     circuit.h(n)
     for qubit in range(n):
         circuit.cp(pi/2**(n-qubit), qubit, n)
-    qft_rotations(circuit, n)
+    return qft_rotations(circuit, n)
 
 # Swaps the order of the qubits in the QFT
 def swap_registers(circuit, n):
@@ -87,6 +87,7 @@ qc.draw(output='mpl')
 qc.save_statevector()
 statevector = sim.run(qc).result().get_statevector()
 plot_bloch_multivector(statevector)
+
 #%%
 # Below, we will test the n-qubit QFT circuit on a real quantum computer. We
 # will first create the Fourier transformed state 11, apply the inverse of the
@@ -139,6 +140,7 @@ job = backend.run(transpiled_qc, shots=shots)
 job_monitor(job)
 counts = job.result().get_counts()
 plot_histogram(counts)
+
 # %%
 # This cell is an answer to Problem 3 in section 3.5 of the Qiskit textbook.
 # Write the QFT function without recursion. Verify with the unitary simulator.
@@ -150,7 +152,7 @@ def qft_rotations_norec(circuit,n):
     # 'n' is the number of qubits involved in the QFT, so subtract 1 to get the
     # correct index.
     n -= 1
-    while n > 0:
+    while n >= 0:
         circuit.h(n)
         for qubit in range(n):
             circuit.cp(pi/2**(n-qubit), qubit, n)
@@ -161,8 +163,9 @@ def qft_rotations_norec(circuit,n):
 # without recursion to compare the result.
 nqubits = 2
 qc = QuantumCircuit(nqubits)
+qc_init = qc.copy()
 qc_rec = qft_rotations(qc, nqubits)
-qc_norec = qft_rotations_norec(qc, nqubits)
+qc_norec = qft_rotations_norec(qc_init, nqubits)
 
 # Obtain the unitary matrix of the two QFT rotations functions above.
 # Subtracting them and printing the matrix verifies they are the same

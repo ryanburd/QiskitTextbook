@@ -66,34 +66,184 @@ plot_histogram(answer)
 
 #%%
 # This cell completes Example: Getting More Precision, where (2^n)theta cannot
-# be calculated exactly. Theta = 1/3
+# be calculated exactly with n <= 6 and theta = 1/3. The code is virtually
+# identical to the above cell. It has been compiled into a function to reuse in
+# later problems.
 
+def QPE_sim(circuit, angle, nqubits):
+
+    for qubit in range(nqubits-1):
+        circuit.h(qubit)
+
+    repetitions = 1
+    for counting_qubit in range(nqubits-1):
+        for i in range(repetitions):
+            circuit.cp(angle, counting_qubit, nqubits-1)
+        repetitions *= 2
+
+    circuit = circuit.compose(QFT(nqubits-1, inverse=True), range(nqubits-1))
+
+    for n in range(nqubits-1):
+        circuit.measure(n,n)
+
+    circuit.draw()
+
+    aer_sim = Aer.get_backend('aer_simulator')
+    shots = 4096
+    t_circuit = transpile(circuit, aer_sim)
+    results = aer_sim.run(t_circuit, shots=shots).result()
+    answer = results.get_counts()
+
+    return answer
+
+
+# Use 6 qubits to estimate theta = 1/3.
 nqubits = 6
 qpe2 = QuantumCircuit(nqubits, nqubits-1)
+qpe2.x(nqubits-1)
+answer = QPE_sim(qpe2, 2*np.pi/3, nqubits)
+plot_histogram(answer)
+
+# %%
+# This cell completes Experiment with Real Devices. The T-gate example from
+# above will be repeated, but this time performed on a real quantum computer to
+# show the influence of noise and gate errors. The |001> state should still be
+# the most probable, but it will no longer be measured with certainty.
+
+nqubits = 4
+qpe3 = QuantumCircuit(nqubits, nqubits-1)
+qpe3.x(nqubits-1)
 
 for qubit in range(nqubits-1):
-    qpe2.h(qubit)
+    qpe3.h(qubit)
 
-qpe2.x(nqubits-1)
-
-angle = 2*np.pi/3
 repetitions = 1
 for counting_qubit in range(nqubits-1):
     for i in range(repetitions):
-        qpe2.cp(angle, counting_qubit, nqubits-1)
-    repetitions = 2
+        qpe3.cp(np.pi/4, counting_qubit, nqubits-1)
+    repetitions *= 2
 
-qpe2 = qpe2.compose(QFT(nqubits-1, inverse=True), [i for i in range(nqubits-1)])
+qpe3.barrier()
+qpe3 = qpe3.compose(QFT(nqubits-1, inverse=True), range(nqubits-1))
+qpe3.barrier()
+for n in range(nqubits-1):
+    qpe3.measure(n,n)
+qpe3.draw(output='mpl')
+
+# Find the least busy computer.
+from qiskit.providers.ibmq import least_busy
+IBMQ.load_account()
+from qiskit.tools.monitor import job_monitor
+provider = IBMQ.get_provider(hub='ibm-q')
+backend = least_busy(provider.backends(filters=lambda x: x.configuration().n_qubits >= (n+1) and
+                                   not x.configuration().simulator and x.status().operational==True))
+print("least busy backend: ", backend)
+
+# Run with 2048 shots.
+shots = 2048
+t_qpe3 = transpile(qpe3, backend, optimization_level=3)
+job = backend.run(t_qpe3, shots=shots)
+job_monitor(job)
+
+# Get the results from the computation.
+results = job.result()
+answer = results.get_counts(qpe3)
+
+plot_histogram(answer)
+
+# %%
+# The remaining cells completes the problems in section 3.6.
+
+# Problem 1: Try the experiments above with different gates (CNOT, Controlled-S,
+# Controlled-T+); what results do you expect? What results do you get?
+
+# CNOT: theta = 0 since phase = 1 with |psi> = |+>
+# Regardless of n, (2^n)theta should equal 0.
+
+# Can also use |psi> = |->, where theta = 1/2.
+# With n = 3, (2^n)theta should equal 4.
+nqubits = 4
+qpe4 = QuantumCircuit(nqubits, nqubits-1)
+# qpe4.x(nqubits-1)
+qpe4.h(nqubits-1)
+
+for qubit in range(nqubits-1):
+        qpe4.h(qubit)
+
+repetitions = 1
+for counting_qubit in range(nqubits-1):
+    for i in range(repetitions):
+        qpe4.cx(counting_qubit, nqubits-1)
+    repetitions *= 2
+
+qpe4 = qpe4.compose(QFT(nqubits-1, inverse=True), range(nqubits-1))
 
 for n in range(nqubits-1):
-    qpe2.measure(n,n)
+    qpe4.measure(n,n)
 
-qpe2.draw()
+qpe4.draw()
 
 aer_sim = Aer.get_backend('aer_simulator')
 shots = 4096
-t_qpe2 = transpile(qpe2, aer_sim)
-results = aer_sim.run(t_qpe2, shots=shots).result()
+t_qpe4 = transpile(qpe4, aer_sim)
+results = aer_sim.run(t_qpe4, shots=shots).result()
 answer = results.get_counts()
 
 plot_histogram(answer)
+
+#%%
+# Problem 1: Controlled-S: theta = 1/4, |psi> = |1>
+# With n = 3, (2^n)theta should equal 2, |010>
+nqubits = 4
+qpe2 = QuantumCircuit(nqubits, nqubits-1)
+qpe2.x(nqubits-1)
+answer = QPE_sim(qpe2, np.pi/2, nqubits)
+plot_histogram(answer)
+
+#%%
+# Problem 1: Controlled-T+: theta = 5/8, |psi> = |1>
+# Theta comes from exp[i*pi/4] for T gate + exp[i*pi] to negate the phase.
+# With n = 3, (2^n)theta should equal 5, |101>
+nqubits = 4
+qpe2 = QuantumCircuit(nqubits, nqubits-1)
+qpe2.x(nqubits-1)
+answer = QPE_sim(qpe2, np.pi + np.pi/4, nqubits)
+plot_histogram(answer)
+
+# %%
+# This cell completes Problem 2: Try the experiment with a Controlled-Y-gate,
+# do you get the result you expected? (Hint: Remember to make sure |psi> is an
+# eigenstate of Y!)
+
+# Controlled-Y: theta = 0 since phase = 1 with |psi> = |0> + i|1>
+# Regardless of n, (2^n)theta should equal 0.
+nqubits = 4
+qpe4 = QuantumCircuit(nqubits, nqubits-1)
+# qpe4.x(nqubits-1)
+qpe4.h(nqubits-1)
+qpe4.s(nqubits-1)
+
+for qubit in range(nqubits-1):
+        qpe4.h(qubit)
+
+repetitions = 1
+for counting_qubit in range(nqubits-1):
+    for i in range(repetitions):
+        qpe4.cy(counting_qubit, nqubits-1)
+    repetitions *= 2
+
+qpe4 = qpe4.compose(QFT(nqubits-1, inverse=True), range(nqubits-1))
+
+for n in range(nqubits-1):
+    qpe4.measure(n,n)
+
+qpe4.draw()
+
+aer_sim = Aer.get_backend('aer_simulator')
+shots = 4096
+t_qpe4 = transpile(qpe4, aer_sim)
+results = aer_sim.run(t_qpe4, shots=shots).result()
+answer = results.get_counts()
+
+plot_histogram(answer)
+# %%
