@@ -3,6 +3,7 @@ This repository contains files completed along with the Qiskit textbook, includi
 
 ## Sections completed
 3.5 - Quantum Fourier transform
+3.6 - Quantum phase estimation
 
 ## Sections in progress
-3.6 - Quantum phase estimation
+5.1 HHL
