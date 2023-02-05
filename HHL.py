@@ -80,3 +80,113 @@ def get_solution_vector(solution):
 print('full naive solution vector:', get_solution_vector(naive_hhl_solution))
 print('full tridi solution vector:', get_solution_vector(tridi_solution))
 print('classical state:', classical_solution.state)
+
+#%%
+# This cell runs a larger example of the HHL algorithm that can't be
+# completed exactly.
+
+from scipy.sparse import diags
+
+# Use 2 qubits for the |b> state, requiring a 4x4 matrix
+num_qubits = 2
+matrix_size = 2**num_qubits
+
+a = 1
+b = -1/3
+
+matrix = diags([b, a, b],
+               [-1, 0, 1],
+               shape = (matrix_size, matrix_size)).toarray()
+
+# |b> = |1000>
+vector = np.array([1] + [0]*(matrix_size - 1))
+
+classical_solution = NumPyLinearSolver().solve(matrix, vector / np.linalg.norm(vector))
+naive_hhl_solution = HHL().solve(matrix, vector)
+tridi_matrix = TridiagonalToeplitz(num_qubits, a, b)
+tridi_solution = HHL().solve(tridi_matrix, vector)
+
+# Notice how the quantum solutions don't match the classical solution exactly
+print('classical euclidean norm:', classical_solution.euclidean_norm)
+print('naive euclidean norm:', naive_hhl_solution.euclidean_norm)
+print('tridiagonal euclidean norm:', tridi_solution.euclidean_norm)
+
+from qiskit import transpile
+
+max_qubits = 4
+i = 1
+naive_depths = []
+tridi_depths = []
+for nqubits in range(1, max_qubits+1):
+    matrix = diags([b, a, b],
+                   [-1, 0, 1],
+                   shape = (2**nqubits, 2**nqubits)).toarray()
+    vector = np.array([1] + [0]*(2**nqubits-1))
+
+    naive_hhl_solution = HHL().solve(matrix, vector)
+    tridi_matrix = TridiagonalToeplitz(nqubits, a, b)
+    tridi_solution = HHL().solve(tridi_matrix, vector)
+
+    naive_qc = transpile(naive_hhl_solution.state, basis_gates = ['id', 'rz', 'sx', 'x', 'cx'])
+    tridi_qc = transpile(tridi_solution.state, basis_gates = ['id', 'rz', 'sx', 'x', 'cx'])
+
+    naive_depths.append(naive_qc.depth())
+    tridi_depths.append(tridi_qc.depth())
+
+    i += 1
+
+sizes = [f"{2**nqubits}x{2**nqubits}" for nqubits in range(1, max_qubits+1)]
+columns = ['size of the system', 'quantum_solution depth', 'tridi_solution depth']
+data = np.array([sizes, naive_depths, tridi_depths])
+row_format = "{:>23}" * (len(columns) + 2)
+for team, row in zip(columns, data):
+    print(row_format.format(team, *row))
+
+print('excess:', [naive_depths[i] - tridi_depths[i] for i in range(0, len(naive_depths))])
+# %%
+# This cell
+
+from linear_solvers.observables import AbsoluteAverage, MatrixFunctional
+
+num_qubits = 1
+matrix_size = 2**num_qubits
+
+a = 1
+b = -1/3
+
+matrix = diags([b, a, b],
+               [-1, 0, 1],
+               shape = (matrix_size, matrix_size)).toarray()
+vector = np.array([1] + [0]*(matrix_size - 1))
+tridi_matrix = TridiagonalToeplitz(1, a, b)
+
+average_solution = HHL().solve(tridi_matrix, vector, AbsoluteAverage())
+classical_average = NumPyLinearSolver().solve(matrix, vector / np.linalg.norm(vector), AbsoluteAverage())
+
+print('quantum average:', average_solution.observable)
+print('classical average:', classical_average.observable)
+print('quantum circuit results:', average_solution.circuit_results)
+
+observable = MatrixFunctional(1, 1/2)
+
+functional_solution = HHL().solve(tridi_matrix, vector, observable)
+classical_functional = NumPyLinearSolver().solve(matrix, vector / np.linalg.norm(vector), observable)
+
+print('quantum functional:', functional_solution.observable)
+print('classical functional:', classical_functional.observable)
+print('quantum circuit results:', functional_solution.circuit_results)
+
+from qiskit import Aer
+
+backend = Aer.get_backend('aer_simulator')
+hhl = HHL(1e-3, quantum_instance=backend)
+
+accurate_solution = hhl.solve(matrix, vector)
+classical_solution = NumPyLinearSolver(
+                    ).solve(matrix,
+                            vector / np.linalg.norm(vector))
+
+print(accurate_solution.euclidean_norm)
+print(classical_solution.euclidean_norm)
+
+# %%
