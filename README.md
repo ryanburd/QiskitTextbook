@@ -6,4 +6,5 @@ This repository contains files completed along with the Qiskit textbook, includi
 3.6 - Quantum phase estimation
 
 ## Sections in progress
-5.1 HHL
+5.1 - HHL algorithm
+5.2 - VQE algorithm
